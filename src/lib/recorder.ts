@@ -13,19 +13,22 @@ export const StartRecording = async (onSuccess: {
     audio: string
     id: string
 }) => {
-    //! 13:24:26 suraj changed this 
     try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true
-        });
-        mediaRecorder = new MediaRecorder(stream);
+        // Use the Electron-compatible approach
+        await selectSources({
+            screen: onSuccess.screen,
+            audio: onSuccess.audio,
+            id: onSuccess.id,
+            preset: 'HD'
+        }, { current: null }); // Pass null video element since we don't need preview
         
-        hidePluginWindow(true)  
-        videoTransferFileName = `${uuid()}-${onSuccess?.id.slice(0,8)}.webm`
-        mediaRecorder.start(1000)
+        // After sources are configured, start recording
+        startRecordingWithSources();
+        
     } catch (error) {
         console.error('Error starting recording:', error);
+        hidePluginWindow(false);
+        throw error;
     }
 }
 
@@ -51,48 +54,77 @@ export const selectSources = async (
         id: string
         preset: 'HD' | 'SD'
     },
-    videoElement: React.RefObject<HTMLVideoElement>
+    videoElement?: React.RefObject<HTMLVideoElement>
 ) => {
-    if(onSources && onSources.screen && onSources.audio && onSources.id) {
-        const constraints: any = {
-            audio: false,
-            video:{
-                mandatory:{
-                    chromeMediaSource: 'desktop',
-                    chromeMediaSourceId: onSources?.screen,
-                    minWidth: onSources.preset === 'HD' ? 1920 : 1280,
-                    maxWidth: onSources.preset === 'HD' ? 1920 : 1280,
-                    minHeight: onSources.preset === 'HD' ? 1080 : 720,
-                    maxHeight: onSources.preset === 'HD' ? 1080 : 720,
-                    frameRate: 30
+    try {
+        if(onSources && onSources.screen && onSources.audio && onSources.id) {
+            const constraints: any = {
+                audio: false,
+                video:{
+                    mandatory:{
+                        chromeMediaSource: 'desktop',
+                        chromeMediaSourceId: onSources?.screen,
+                        minWidth: onSources.preset === 'HD' ? 1920 : 1280,
+                        maxWidth: onSources.preset === 'HD' ? 1920 : 1280,
+                        minHeight: onSources.preset === 'HD' ? 1080 : 720,
+                        maxHeight: onSources.preset === 'HD' ? 1080 : 720,
+                        frameRate: 30
+                    }
                 }
             }
+
+            userId = onSources?.id
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+            const audioStream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: onSources?.audio ? {deviceId: {exact: onSources.audio}} : false,
+            })
+
+            // Set video preview if element is provided
+            if(videoElement && videoElement.current) {
+                videoElement.current.srcObject = stream
+                await videoElement.current.play();
+            }
+
+            const combineStream = new MediaStream([
+                ...stream.getTracks(),
+                ...audioStream.getTracks()
+            ])
+
+            mediaRecorder = new MediaRecorder(combineStream,{
+                mimeType: 'video/webm; codecs=vp9',
+            })
+
+            mediaRecorder.ondataavailable = onDataAvailable
+            mediaRecorder.onstop = stopRecording
         }
-
-        userId = onSources?.id
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints)
-
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-            video: false,
-            audio: onSources?.audio ? {deviceId: {exact: onSources.audio}} : false,
-        })
-
-        if(videoElement && videoElement.current) {
-            videoElement.current.srcObject = stream
-            await videoElement.current.play();
-        }
-
-        const combineStream = new MediaStream([
-            ...stream.getTracks(),
-            ...audioStream.getTracks()
-        ])
-
-        mediaRecorder = new MediaRecorder(combineStream,{
-            mimeType: 'video/webm; codecs=vp9',
-        })
-
-        mediaRecorder.ondataavailable = onDataAvailable
-        mediaRecorder.onstart = stopRecording
+    } catch (error) {
+        console.error('Error selecting sources:', error);
+        throw error;
     }
 }
+
+export const startRecordingWithSources = () => {
+    if (!mediaRecorder) {
+        console.error('MediaRecorder not initialized. Please select sources first.');
+        return;
+    }
+    
+    try {
+        hidePluginWindow(true);
+        videoTransferFileName = `${uuid()}-recording.webm`;
+        userId = 'default-user-id'; // You might want to pass this as parameter
+        
+        mediaRecorder.start(1000);
+        console.log('Recording started successfully');
+        
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        hidePluginWindow(false);
+        throw error;
+    }
+}
+
+//? 13:42:23

@@ -2,6 +2,9 @@ import { app, ipcMain, desktopCapturer, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch("enable-features", "VizDisplayCompositor");
+app.commandLine.appendSwitch("disable-features", "VizDisplayCompositor");
 process.env.APP_ROOT = path.join(__dirname, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
@@ -26,7 +29,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       devTools: true,
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      webSecurity: false,
+      experimentalFeatures: true
     }
   });
   studio = new BrowserWindow({
@@ -45,7 +50,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       devTools: true,
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      webSecurity: false,
+      experimentalFeatures: true
     }
   });
   floatingWebCam = new BrowserWindow({
@@ -64,13 +71,17 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       devTools: true,
-      preload: path.join(__dirname, "preload.mjs")
+      preload: path.join(__dirname, "preload.mjs"),
+      webSecurity: false,
+      experimentalFeatures: true
     }
   });
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setAlwaysOnTop(true, "screen-saver", 1);
   studio.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   studio.setAlwaysOnTop(true, "screen-saver", 1);
+  floatingWebCam.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  floatingWebCam.setAlwaysOnTop(true, "screen-saver", 1);
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
   });
@@ -105,13 +116,18 @@ ipcMain.on("closeApp", () => {
   }
 });
 ipcMain.handle("getSources", async () => {
-  const data = await desktopCapturer.getSources({
-    thumbnailSize: { height: 100, width: 150 },
-    fetchWindowIcons: true,
-    types: ["window", "screen"]
-  });
-  console.log("DISPLAYS", data);
-  return data;
+  try {
+    const data = await desktopCapturer.getSources({
+      thumbnailSize: { height: 100, width: 150 },
+      fetchWindowIcons: true,
+      types: ["window", "screen"]
+    });
+    console.log("DISPLAYS", data);
+    return data;
+  } catch (error) {
+    console.error("Error getting desktop sources:", error);
+    throw error;
+  }
 });
 ipcMain.on("media-sources", (event, payload) => {
   console.log(event);

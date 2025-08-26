@@ -4,6 +4,13 @@ import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Disable hardware acceleration for better compatibility with screen capture
+app.disableHardwareAcceleration()
+
+// Enable experimental features for screen capture
+app.commandLine.appendSwitch('enable-features', 'VizDisplayCompositor')
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor')
+
 // The built directory structure
 //
 // ├─┬─┬ dist
@@ -43,6 +50,8 @@ function createWindow() {
       contextIsolation: true,
       devTools: true,
       preload: path.join(__dirname, 'preload.mjs'),
+      webSecurity: false,
+      experimentalFeatures: true,
     },
   })
 
@@ -63,6 +72,8 @@ function createWindow() {
       contextIsolation: true,
       devTools: true,
       preload: path.join(__dirname, 'preload.mjs'),
+      webSecurity: false,
+      experimentalFeatures: true,
     },
   })
 
@@ -83,6 +94,8 @@ function createWindow() {
       contextIsolation: true,
       devTools: true,
       preload: path.join(__dirname, 'preload.mjs'),
+      webSecurity: false,
+      experimentalFeatures: true,
     },
   })
 
@@ -90,6 +103,8 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'screen-saver', 1)
   studio.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   studio.setAlwaysOnTop(true, 'screen-saver', 1)
+  floatingWebCam.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  floatingWebCam.setAlwaysOnTop(true, 'screen-saver', 1)
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
@@ -135,13 +150,18 @@ ipcMain.on('closeApp', () => {
 })
 
 ipcMain.handle('getSources', async () => {
-  const data = await desktopCapturer.getSources({
-    thumbnailSize: { height: 100, width: 150 },
-    fetchWindowIcons: true,
-    types: ['window', 'screen']
-  })
-  console.log('DISPLAYS', data)
-  return data
+  try {
+    const data = await desktopCapturer.getSources({
+      thumbnailSize: { height: 100, width: 150 },
+      fetchWindowIcons: true,
+      types: ['window', 'screen']
+    })
+    console.log('DISPLAYS', data)
+    return data
+  } catch (error) {
+    console.error('Error getting desktop sources:', error)
+    throw error
+  }
 })
 
 ipcMain.on('media-sources', (event, payload) => {
